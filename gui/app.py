@@ -20,11 +20,26 @@ class AttendanceApp(tk.Tk):
         self.camera = None
         self.camera_running = False
         self.qr_detector = cv2.QRCodeDetector()
+        self.face_detector = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
         self.last_processed_payload = None
         self.video_image = None
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        if self.face_detector.empty():
+            self.status_label.configure(
+                text="Face detector unavailable",
+                bg="#fef2f2",
+                fg="#b91c1c"
+            )
+            self.scan_details_label.configure(
+                text="OpenCV's face detection model could not be loaded. Check the OpenCV installation."
+            )
+        else:
+            self.status_label.configure(text="Starting camera...")
+            self.after(250, self.start_camera)
 
     def _build_ui(self):
         header = tk.Frame(self, bg="#172554", padx=24, pady=18)
@@ -45,7 +60,7 @@ class AttendanceApp(tk.Tk):
         left.pack(side="left", fill="both", expand=True)
 
         self.video_label = tk.Label(
-            left, text="Camera is stopped", bg="#111827", fg="white",
+            left, text="Starting camera...", bg="#111827", fg="white",
             font=("Segoe UI", 14), width=70, height=25
         )
         self.video_label.pack(fill="both", expand=True)
@@ -92,7 +107,7 @@ class AttendanceApp(tk.Tk):
         ).pack(anchor="w")
         self.scan_details_label = tk.Label(
             right,
-            text="Start the camera, then hold a registered student's QR code in view.",
+            text="The camera starts automatically. Hold your face and the student's QR code in view together.",
             bg="#f8fafc",
             fg="#334155",
             font=("Segoe UI", 10),
@@ -106,7 +121,7 @@ class AttendanceApp(tk.Tk):
 
         tk.Label(
             right,
-            text="TO RECORD ATTENDANCE\n\n1. Register the student and open their QR image.\n\n2. Start the camera.\n\n3. Hold the QR code steady in front of the camera.\n\n4. Wait for the result to appear above.",
+            text="TO RECORD ATTENDANCE\n\n1. Get your QR code from the college.\n\n2. Face the camera and hold your QR code in view.\n\n3. Keep both visible until the green frames appear and attendance is recorded.",
             bg="white",
             fg="#374151",
             font=("Segoe UI", 10),
@@ -123,6 +138,16 @@ class AttendanceApp(tk.Tk):
     def start_camera(self):
         if self.camera_running:
             return
+        if self.face_detector.empty():
+            self.status_label.configure(
+                text="Face detector unavailable",
+                bg="#fef2f2",
+                fg="#b91c1c"
+            )
+            self.scan_details_label.configure(
+                text="OpenCV's face detection model could not be loaded. Check the OpenCV installation."
+            )
+            return
 
         camera_backends = (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY)
         for camera_index in range(3):
@@ -136,6 +161,7 @@ class AttendanceApp(tk.Tk):
                 break
 
         if self.camera is None:
+            self.video_label.configure(image="", text="Camera unavailable")
             messagebox.showerror(
                 "Camera Error",
                 "Unable to open a webcam. Check Windows camera permissions, "
@@ -153,7 +179,7 @@ class AttendanceApp(tk.Tk):
             fg="#1d4ed8"
         )
         self.scan_details_label.configure(
-            text="Hold a registered student's QR code in view. The latest result will appear here."
+            text="Position your face and the student's QR code in view together."
         )
         self._update_frame()
 
@@ -176,19 +202,65 @@ class AttendanceApp(tk.Tk):
 
         frame = cv2.flip(frame, 1)
         payload, points, _ = self.qr_detector.detectAndDecode(frame)
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_detector.detectMultiScale(
+            gray_frame,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(60, 60),
+        )
 
         if points is not None:
             points = points.astype(int).reshape(-1, 2)
             for index in range(len(points)):
                 cv2.line(frame, tuple(points[index]), tuple(points[(index + 1) % len(points)]), (0, 220, 80), 3)
 
-        if payload and payload != self.last_processed_payload:
+        for x, y, width, height in faces:
+            cv2.rectangle(
+                frame,
+                (x, y),
+                (x + width, y + height),
+                (0, 220, 80),
+                3,
+            )
+
+        awaiting_scan = (
+            self.last_processed_payload is None
+            or (payload and payload != self.last_processed_payload)
+        )
+        if awaiting_scan:
+            if payload and not len(faces):
+                self.status_label.configure(
+                    text="QR detected - face not detected",
+                    bg="#fef3c7",
+                    fg="#92400e"
+                )
+                self.scan_details_label.configure(
+                    text="Keep your face visible to the camera along with the QR code."
+                )
+            elif len(faces) and not payload:
+                self.status_label.configure(
+                    text="Face detected - show the QR code",
+                    bg="#eff6ff",
+                    fg="#1d4ed8"
+                )
+                self.scan_details_label.configure(
+                    text="Hold the registered student's QR code in view with your face."
+                )
+            elif not payload and not len(faces):
+                self.status_label.configure(
+                    text="Ready - show face and QR code",
+                    bg="#eff6ff",
+                    fg="#1d4ed8"
+                )
+
+        if payload and len(faces) and payload != self.last_processed_payload:
             self.last_processed_payload = payload
             result = mark_attendance(payload, frame.copy())
             if result["ok"]:
                 student = result["student"]
                 self.status_label.configure(
-                    text="Attendance recorded",
+                    text="Attendance recorded - thank you!",
                     bg="#dcfce7",
                     fg="#166534"
                 )
@@ -197,9 +269,10 @@ class AttendanceApp(tk.Tk):
                         f"Student: {student['full_name']}\n"
                         f"Student No: {student['student_number']}\n"
                         f"Class: {student['class_name']}\n\n"
-                        "Attendance photo saved."
+                        f"Attendance recorded successfully.\nThank you, {student['full_name']}!"
                     )
                 )
+                self.bell()
             else:
                 self.status_label.configure(
                     text="Attendance not recorded",
@@ -230,7 +303,7 @@ class AttendanceApp(tk.Tk):
             fg="#1d4ed8"
         )
         self.scan_details_label.configure(
-            text="Start the camera, then hold a registered student's QR code in view."
+            text="The camera starts automatically. Hold your face and the student's QR code in view together."
         )
 
     def _on_close(self):

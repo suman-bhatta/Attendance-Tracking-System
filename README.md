@@ -7,6 +7,8 @@ A modular Python desktop application for student attendance using a webcam, QR c
 - Desktop GUI built with Tkinter
 - Live webcam preview
 - QR code detection with OpenCV
+- Automatic camera startup and face presence detection during QR attendance scans
+- On-screen attendance confirmation and success sound
 - Student registration and QR code generation
 - Capture and save an attendance image
 - SQLite attendance records with date/time
@@ -41,8 +43,8 @@ Then launch the attendance scanner:
 python main.py
 ```
 
-Show the generated QR code to the webcam. A successful scan captures a photo and records attendance. QR images are saved under `qrcodes/`, captured images under `captures/`, and the database under `data/`.
+The attendance camera starts automatically. Show the student's face and generated QR code together in the camera view. A successful scan outlines the detected face and QR code in green, captures a photo, records attendance, and displays a confirmation with a sound. QR images are saved under `qrcodes/`, captured images under `captures/`, and the database under `data/`.
 
 ## Important security note
 
-This starter validates the QR code against the local student database and captures a photo, but it does **not** perform facial identity matching. A photo is evidence of a scan, not proof that the person in front of the camera is the registered student. If face verification is required, add a face-matching component, consent and retention controls, and anti-spoofing protections before using it in a real school.
+The attendance scanner checks that a face is visible while a student's QR code is scanned, but it does **not** match that face to the registered student. A photo is evidence of a scan, not proof of identity. If face verification is required, add a face-matching component, consent and retention controls, and anti-spoofing protections before using it in a real school.
