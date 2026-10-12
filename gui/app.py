@@ -57,24 +57,61 @@ class AttendanceApp(tk.Tk):
         self.stop_button = ttk.Button(controls, text="Stop Camera", command=self.stop_camera, state="disabled")
         self.stop_button.pack(side="left", padx=(8, 0))
 
-        right = tk.Frame(body, bg="white", padx=18, pady=18, width=270)
+        right = tk.Frame(body, bg="white", padx=18, pady=18, width=290)
         right.pack(side="right", fill="y", padx=(16, 0))
         right.pack_propagate(False)
 
-        tk.Label(right, text="Attendance Status", bg="white", fg="#172554",
-                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        tk.Label(
+            right,
+            text="Attendance",
+            bg="white",
+            fg="#172554",
+            font=("Segoe UI", 16, "bold")
+        ).pack(anchor="w")
+
         self.status_label = tk.Label(
-            right, text="Ready to scan", bg="#eff6ff", fg="#1d4ed8",
-            font=("Segoe UI", 11), justify="left", anchor="nw",
-            padx=12, pady=12, wraplength=220
+            right,
+            text="Camera stopped",
+            bg="#eff6ff",
+            fg="#1d4ed8",
+            font=("Segoe UI", 12, "bold"),
+            justify="left",
+            anchor="w",
+            padx=12,
+            pady=12,
+            wraplength=240
         )
-        self.status_label.pack(fill="x", pady=(12, 16))
+        self.status_label.pack(fill="x", pady=(12, 18))
 
         tk.Label(
             right,
-            text="How to use\n\n1. Register a student with register_student.py\n2. Open that student's QR code\n3. Start the camera\n4. Hold the QR code in view\n5. The system captures an image and records attendance",
-            bg="white", fg="#374151", font=("Segoe UI", 10),
-            justify="left", wraplength=225
+            text="LATEST SCAN",
+            bg="white",
+            fg="#64748b",
+            font=("Segoe UI", 9, "bold")
+        ).pack(anchor="w")
+        self.scan_details_label = tk.Label(
+            right,
+            text="Start the camera, then hold a registered student's QR code in view.",
+            bg="#f8fafc",
+            fg="#334155",
+            font=("Segoe UI", 10),
+            justify="left",
+            anchor="nw",
+            padx=12,
+            pady=12,
+            wraplength=240
+        )
+        self.scan_details_label.pack(fill="x", pady=(6, 18))
+
+        tk.Label(
+            right,
+            text="TO RECORD ATTENDANCE\n\n1. Register the student and open their QR image.\n\n2. Start the camera.\n\n3. Hold the QR code steady in front of the camera.\n\n4. Wait for the result to appear above.",
+            bg="white",
+            fg="#374151",
+            font=("Segoe UI", 10),
+            justify="left",
+            wraplength=245
         ).pack(anchor="w")
 
         footer = tk.Label(
@@ -86,18 +123,38 @@ class AttendanceApp(tk.Tk):
     def start_camera(self):
         if self.camera_running:
             return
-        self.camera = cv2.VideoCapture(0)
-        if not self.camera.isOpened():
-            self.camera.release()
-            self.camera = None
-            messagebox.showerror("Camera Error", "Unable to open the webcam. Check camera permissions.")
+
+        camera_backends = (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY)
+        for camera_index in range(3):
+            for backend in camera_backends:
+                camera = cv2.VideoCapture(camera_index, backend)
+                if camera.isOpened():
+                    self.camera = camera
+                    break
+                camera.release()
+            if self.camera is not None:
+                break
+
+        if self.camera is None:
+            messagebox.showerror(
+                "Camera Error",
+                "Unable to open a webcam. Check Windows camera permissions, "
+                "close other apps using the camera, and make sure it is connected.",
+            )
             return
 
         self.camera_running = True
         self.last_processed_payload = None
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
-        self.status_label.configure(text="Camera started. Show a student QR code.", bg="#eff6ff", fg="#1d4ed8")
+        self.status_label.configure(
+            text="Camera active - Ready to scan",
+            bg="#eff6ff",
+            fg="#1d4ed8"
+        )
+        self.scan_details_label.configure(
+            text="Hold a registered student's QR code in view. The latest result will appear here."
+        )
         self._update_frame()
 
     def _update_frame(self):
@@ -106,7 +163,14 @@ class AttendanceApp(tk.Tk):
 
         ok, frame = self.camera.read()
         if not ok:
-            self.status_label.configure(text="Could not read from camera.", bg="#fef2f2", fg="#b91c1c")
+            self.status_label.configure(
+                text="Camera active - No video",
+                bg="#fef2f2",
+                fg="#b91c1c"
+            )
+            self.scan_details_label.configure(
+                text="Could not read from the camera. Check that it is connected and not in use by another app."
+            )
             self.after(100, self._update_frame)
             return
 
@@ -122,12 +186,27 @@ class AttendanceApp(tk.Tk):
             self.last_processed_payload = payload
             result = mark_attendance(payload, frame.copy())
             if result["ok"]:
-                self.status_label.configure(text=result["message"], bg="#dcfce7", fg="#166534")
-                messagebox.showinfo("Attendance Successful", result["message"])
-                # Require the QR code to leave and be presented again before processing it again.
+                student = result["student"]
+                self.status_label.configure(
+                    text="Attendance recorded",
+                    bg="#dcfce7",
+                    fg="#166534"
+                )
+                self.scan_details_label.configure(
+                    text=(
+                        f"Student: {student['full_name']}\n"
+                        f"Student No: {student['student_number']}\n"
+                        f"Class: {student['class_name']}\n\n"
+                        "Attendance photo saved."
+                    )
+                )
             else:
-                self.status_label.configure(text=result["message"], bg="#fef2f2", fg="#b91c1c")
-                messagebox.showwarning("Attendance Not Marked", result["message"])
+                self.status_label.configure(
+                    text="Attendance not recorded",
+                    bg="#fef2f2",
+                    fg="#b91c1c"
+                )
+                self.scan_details_label.configure(text=result["message"])
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         rgb_frame = cv2.resize(rgb_frame, (700, 480))
@@ -145,7 +224,14 @@ class AttendanceApp(tk.Tk):
         self.video_image = None
         self.start_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
-        self.status_label.configure(text="Camera stopped. Ready to scan.", bg="#eff6ff", fg="#1d4ed8")
+        self.status_label.configure(
+            text="Camera stopped",
+            bg="#eff6ff",
+            fg="#1d4ed8"
+        )
+        self.scan_details_label.configure(
+            text="Start the camera, then hold a registered student's QR code in view."
+        )
 
     def _on_close(self):
         self.stop_camera()
