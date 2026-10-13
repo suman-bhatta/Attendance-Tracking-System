@@ -29,8 +29,6 @@ build/
 
 staticfiles/
 
-<<<<<<< HEAD
 static/
-=======
-static/
->>>>>>> e468d618e1560638de4393789581c054f1c4656f
+
+qrcodes
