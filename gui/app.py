@@ -24,7 +24,12 @@ class AttendanceApp(tk.Tk):
         self.video_image = None
 
         self._build_ui()
+        self.video_label.configure(text="Starting camera...")
+        self.start_button.configure(state="disabled")
+        self.status_label.configure(text="Starting camera...")
+        self.scan_details_label.configure(text="Opening the webcam automatically...")
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.after(100, self.start_camera)
 
     def _build_ui(self):
         header = tk.Frame(self, bg="#172554", padx=24, pady=18)
@@ -136,6 +141,16 @@ class AttendanceApp(tk.Tk):
                 break
 
         if self.camera is None:
+            self.video_label.configure(text="Camera is stopped")
+            self.start_button.configure(state="normal")
+            self.status_label.configure(
+                text="Camera stopped",
+                bg="#eff6ff",
+                fg="#1d4ed8"
+            )
+            self.scan_details_label.configure(
+                text="Camera could not be opened. Check the connection and permissions, then try again."
+            )
             messagebox.showerror(
                 "Camera Error",
                 "Unable to open a webcam. Check Windows camera permissions, "

@@ -41,7 +41,7 @@ Then launch the attendance scanner:
 python main.py
 ```
 
-Show the generated QR code to the webcam. A successful scan captures a photo and records attendance. QR images are saved under `qrcodes/`, captured images under `captures/`, and the database under `data/`.
+The attendance scanner opens the webcam automatically when it starts. Show the generated QR code to the webcam; use **Stop Camera** if you need to pause it. A successful scan captures a photo and records attendance. QR images are saved under `qrcodes/`, captured images under `captures/`, and the database under `data/`.
 
 ## Important security note
 
